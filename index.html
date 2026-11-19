@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Talent DB</title>
+<style>
+:root{--b:#1f4e78;--bg:#f5f7fa;--bd:#d9dee5;--mut:#667}
+*{box-sizing:border-box}body{margin:0;font:14px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:#222}
+#lock{max-width:380px;margin:12vh auto;background:#fff;padding:28px;border-radius:10px;box-shadow:0 2px 12px #0001}
+#lock h1{font-size:20px;margin:0 0 14px}#lock input[type=password]{width:100%;padding:10px;font-size:15px;border:1px solid var(--bd);border-radius:6px}
+button{background:var(--b);color:#fff;border:0;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:14px}button.sec{background:#fff;color:var(--b);border:1px solid var(--b)}
+#app{display:none}header{background:var(--b);color:#fff;padding:8px 14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+header .tab{cursor:pointer;opacity:.7;padding:4px 8px;border-radius:4px}header .tab.on{opacity:1;background:#ffffff22}
+header .sp{flex:1}header small{opacity:.8}
+#bar{padding:10px 14px;background:#fff;border-bottom:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#bar input,#bar select{padding:6px 8px;border:1px solid var(--bd);border-radius:5px;font-size:13px}
+#q{flex:1 1 320px;font-size:15px!important;padding:8px 10px!important}
+#tags{padding:6px 14px;background:#fff;border-bottom:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:12px;border:1px solid var(--bd);border-radius:12px;padding:2px 8px;cursor:pointer;background:#fff;user-select:none}
+.chip.on{background:var(--b);color:#fff;border-color:var(--b)}.chip.not{background:#b33;color:#fff;border-color:#b33;text-decoration:line-through}
+#count{padding:6px 14px;color:var(--mut);font-size:13px}
+#wrap{display:flex;height:calc(100vh - 200px)}#list{flex:1;overflow:auto}
+table{border-collapse:collapse;width:100%;background:#fff}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid #eef;font-size:13px;vertical-align:top}
+th{position:sticky;top:0;background:#e9eef4;cursor:pointer;white-space:nowrap;z-index:1}th.s:after{content:" ▲"}th.s.d:after{content:" ▼"}
+tr.r:hover{background:#f0f6ff;cursor:pointer}tr.sel{background:#dcebff!important}
+.t{display:inline-block;font-size:11px;background:#eef2f7;border-radius:8px;padding:0 6px;margin:1px}
+.dnc{color:#b33;font-weight:600}.mut{color:var(--mut)}
+#det{width:44%;min-width:360px;overflow:auto;background:#fff;border-left:1px solid var(--bd);padding:14px 18px;display:none}
+#det h2{margin:0 0 4px;font-size:19px}#det dl{display:grid;grid-template-columns:130px 1fr;gap:3px 10px;margin:10px 0}
+#det dt{color:var(--mut);font-size:12px}#det dd{margin:0;word-break:break-word;white-space:pre-wrap}
+#det pre{white-space:pre-wrap;background:#f7f8fa;padding:8px;border-radius:6px;font-size:12px;max-height:400px;overflow:auto}
+#det table td{font-size:12px}a{color:#1658a8}
+@media(max-width:900px){#det{position:fixed;inset:0;width:auto;z-index:5}#wrap{height:auto}}
+</style></head><body>
+<div id="lock"><h1>Talent database</h1>
+<form id="lf"><input type="password" id="pw" placeholder="Password" autocomplete="current-password" autofocus>
+<p><label><input type="checkbox" id="rem"> Remember on this device</label></p>
+<button id="ub">Unlock</button> <span id="lmsg" class="mut"></span></form></div>
+<div id="app">
+<header><b>Talent DB</b><span class="tab on" data-t="c">Candidates</span><span class="tab" data-t="l">LinkedIn connections</span>
+<span class="sp"></span><small id="pub"></small><button class="sec" id="csv" style="padding:4px 10px">Export CSV</button><button class="sec" id="lockb" style="padding:4px 10px">Lock</button></header>
+<div id="bar">
+<input id="q" placeholder='Search name, email, title, company, skills, notes…  ("exact phrase", -exclude, OR)'>
+<span class="cf"><input id="loc" placeholder="Location" size="12">
+<select id="st"><option value="">Any status</option></select>
+<select id="cl"><option value="">Any client</option></select>
+<select id="rep"><option value="">Replied?</option><option value="y">Replied</option><option value="n">No reply</option></select>
+<label title="Not contacted in N days (includes never contacted)">Not contacted ≥ <input id="nc" type="number" min="0" style="width:60px"> d</label>
+<label title="Contacted within the last N days">Contacted ≤ <input id="wc" type="number" min="0" style="width:60px"> d</label>
+<label><input type="checkbox" id="cv"> Has CV</label>
+<label><input type="checkbox" id="cvs" checked> Search CV text</label>
+<label><input type="checkbox" id="dnc"> Include do-not-contact</label></span>
+<button class="sec" id="clr">Clear</button></div>
+<div id="tags"></div>
+<div id="count"></div>
+<div id="wrap"><div id="list"></div><div id="det"></div></div>
+</div>
+<script>
+const ITER=600000,KEYNAME="tats_key_v1";let D=null,F={},tab="c",rows=[],shown=0,sortK=null,sortD=1,tagSel={},selId=null;
+const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function getBin(){const r=await fetch("data.bin?t="+Date.now(),{cache:"no-store"});if(!r.ok)throw Error("fetch "+r.status);return new Uint8Array(await r.arrayBuffer())}
+async function derive(pw,salt){const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:ITER,hash:"SHA-256"},k,{name:"AES-GCM",length:256},true,["decrypt"])}
+async function decrypt(bin,key){const iv=bin.slice(20,32),ct=bin.slice(32);const gz=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,ct);
+const ds=new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"));return JSON.parse(await new Response(ds).text())}
+async function unlock(pw){$("#lmsg").textContent="Decrypting…";const bin=await getBin();let key;
+if(pw===null){const raw=localStorage.getItem(KEYNAME);if(!raw)return false;key=await crypto.subtle.importKey("raw",Uint8Array.from(atob(raw),c=>c.charCodeAt(0)),"AES-GCM",true,["decrypt"])}
+else key=await derive(pw,bin.slice(4,20));
+try{D=await decrypt(bin,key)}catch(e){$("#lmsg").textContent=pw===null?"":"Wrong password";if(pw===null)localStorage.removeItem(KEYNAME);return false}
+if(pw!==null&&$("#rem").checked){const raw=new Uint8Array(await crypto.subtle.exportKey("raw",key));localStorage.setItem(KEYNAME,btoa(String.fromCharCode(...raw)))}
+init();return true}
+$("#lf").onsubmit=e=>{e.preventDefault();unlock($("#pw").value).catch(err=>$("#lmsg").textContent=err.message)};
+unlock(null).catch(()=>{$("#lmsg").textContent=""});
+$("#lockb").onclick=()=>{localStorage.removeItem(KEYNAME);location.reload()};
+function init(){D.fields.forEach((f,i)=>F[f]=i);$("#lock").style.display="none";$("#app").style.display="block";
+$("#pub").textContent=`${D.cands.length.toLocaleString()} candidates · ${D.li.length.toLocaleString()} LI connections · published ${D.published.replace("T"," ").replace(/\+11:00|\+10:00/,"")} Sydney`;
+const H=D.fields.map(()=>0);
+D.cands.forEach(r=>{const g=i=>r[F[i]]||"";
+r.h=[g("name"),g("emails"),g("current_title"),g("current_company"),g("location"),g("school"),g("skill_tags"),g("best_roles"),g("clients_submitted"),g("client_outcomes"),g("notes"),g("comp_current"),g("comp_expected"),g("linkedin_url"),g("github"),g("x_handle"),g("phone")].join(" \u0001 ").toLowerCase();
+r.cvh=(g("cv_text")).toLowerCase();r.nl=g("name").toLowerCase();r.tg=new Set(g("skill_tags").split(/[,;|]/).map(s=>s.trim()).filter(Boolean));
+r.dn=g("do_not_contact")!=="n"&&g("do_not_contact")!==""});
+D.li.forEach(r=>{r.h=r.slice(0,6).join(" \u0001 ").toLowerCase();r.nl=(r[0]||"").toLowerCase()});
+const tc={},sc={},cc={};D.cands.forEach(r=>{r.tg.forEach(t=>tc[t]=(tc[t]||0)+1);sc[r[F.status]]=(sc[r[F.status]]||0)+1;
+(r[F.clients_submitted]||"").split(/[,;]/).map(s=>s.trim()).filter(Boolean).forEach(c=>cc[c]=(cc[c]||0)+1)});
+Object.entries(sc).sort((a,b)=>b[1]-a[1]).forEach(([s,n])=>$("#st").insertAdjacentHTML("beforeend",`<option value="${esc(s)}">${esc(s)} (${n})</option>`));
+Object.entries(cc).sort((a,b)=>b[1]-a[1]).forEach(([s,n])=>$("#cl").insertAdjacentHTML("beforeend",`<option value="${esc(s)}">${esc(s)} (${n})</option>`));
+$("#tags").innerHTML='<span class="mut" style="font-size:12px">Tags (click = must have, again = exclude):</span> '+Object.entries(tc).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`<span class="chip" data-t="${esc(t)}">${esc(t)} ${n}</span>`).join("");
+document.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{const t=c.dataset.t,v=tagSel[t];tagSel[t]=v===1?-1:v===-1?0:1;c.className="chip"+(tagSel[t]===1?" on":tagSel[t]===-1?" not":"");run()});
+let tm;["#q","#loc","#nc","#wc"].forEach(s=>$(s).oninput=()=>{clearTimeout(tm);tm=setTimeout(run,120)});
+["#st","#cl","#rep","#cv","#cvs","#dnc"].forEach(s=>$(s).onchange=run);
+$("#clr").onclick=()=>{["#q","#loc","#nc","#wc"].forEach(s=>$(s).value="");["#st","#cl","#rep"].forEach(s=>$(s).value="");$("#cv").checked=$("#dnc").checked=false;tagSel={};document.querySelectorAll(".chip").forEach(c=>c.className="chip");run()};
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{tab=t.dataset.t;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));sortK=null;$("#det").style.display="none";$(".cf").style.display=tab==="c"?"":"none";$("#tags").style.display=tab==="c"?"":"none";run()});
+$("#list").onscroll=()=>{const l=$("#list");if(l.scrollTop+l.clientHeight>l.scrollHeight-400)more()};
+$("#csv").onclick=exportCsv;run()}
+function parseQ(q){const out=[];const re=/(-?)(?:"([^"]+)"|(\S+))/g;let m,or=false;while(m=re.exec(q)){const w=(m[2]||m[3]).toLowerCase();if(!m[2]&&w==="or"){or=true;continue}
+const t={neg:!!m[1],w};if(or&&out.length&&!t.neg){const p=out[out.length-1];(p.alt=p.alt||[p.w]).push(w)}else out.push(t);or=false}return out}
+function dayStr(n){const d=new Date(Date.now()-n*864e5);return d.toLocaleDateString("en-CA",{timeZone:"Australia/Sydney"})}
+const CC=[["name","Name"],["current_title","Title"],["current_company","Company"],["location","Location"],["status","Status"],["last_contact","Last contact"],["touches","Touches"],["skill_tags","Tags"],["emails","Email"]];
+const LC=[[0,"Name"],[4,"Position"],[3,"Company"],[2,"Email"],[5,"Connected"],[6,"In ATS"]];
+function run(){const q=parseQ($("#q").value.trim());const src=tab==="c"?D.cands:D.li;
+if(tab==="c"){const loc=$("#loc").value.trim().toLowerCase(),st=$("#st").value,cl=$("#cl").value.toLowerCase(),rp=$("#rep").value,ncv=$("#nc").value,wcv=$("#wc").value,
+hcv=$("#cv").checked,scv=$("#cvs").checked,idn=$("#dnc").checked,nc=ncv!==""?dayStr(+ncv):null,wc=wcv!==""?dayStr(+wcv):null,
+tin=Object.keys(tagSel).filter(t=>tagSel[t]===1),tex=Object.keys(tagSel).filter(t=>tagSel[t]===-1);
+rows=src.filter(r=>{if(!idn&&r.dn)return false;if(st&&r[F.status]!==st)return false;if(rp&&r[F.replied]!==rp)return false;
+if(hcv&&!r[F.cv_path])return false;if(cl&&!(r[F.clients_submitted]||"").toLowerCase().includes(cl))return false;
+if(loc&&!(r[F.location]||"").toLowerCase().includes(loc)&&![...r.tg].some(t=>t.toLowerCase().includes(loc)))return false;
+const lc=r[F.last_contact]||"";if(nc&&lc&&lc>=nc)return false;if(wc&&(!lc||lc<wc))return false;
+for(const t of tin)if(!r.tg.has(t))return false;for(const t of tex)if(r.tg.has(t))return false;
+r.sc=0;for(const t of q){const ws=t.alt||[t.w];const hit=ws.some(w=>r.h.includes(w)||(scv&&r.cvh.includes(w)));if(t.neg?hit:!hit)return false;
+if(!t.neg)r.sc+=ws.some(w=>r.nl.includes(w))?10:ws.some(w=>r.h.includes(w))?2:1}return true})}
+else rows=src.filter(r=>{r.sc=0;for(const t of q){const ws=t.alt||[t.w];const hit=ws.some(w=>r.h.includes(w));if(t.neg?hit:!hit)return false;if(!t.neg)r.sc+=ws.some(w=>r.nl.includes(w))?10:2}return true});
+const cols=tab==="c"?CC:LC;
+if(sortK!==null){const i=tab==="c"?F[sortK]:sortK;rows.sort((a,b)=>{let x=a[i]??"",y=b[i]??"";if(typeof x==="number"||typeof y==="number")return((+x||0)-(+y||0))*sortD;
+if(x===""&&y!=="")return 1;if(y===""&&x!=="")return -1;return String(x).localeCompare(String(y))*sortD})}
+else if(q.length)rows.sort((a,b)=>b.sc-a.sc);
+else if(tab==="c")rows.sort((a,b)=>(b[F.last_contact]||"").localeCompare(a[F.last_contact]||""));
+$("#count").textContent=`${rows.length.toLocaleString()} result${rows.length===1?"":"s"}`+(tab==="c"&&!$("#dnc").checked?" (do-not-contact hidden)":"");
+$("#list").innerHTML=`<table><thead><tr>${cols.map(([k,l])=>`<th data-k="${k}" class="${sortK===k?"s"+(sortD<0?" d":""):""}">${l}</th>`).join("")}</tr></thead><tbody id="tb"></tbody></table>`;
+document.querySelectorAll("th").forEach(th=>th.onclick=()=>{const k=tab==="c"?th.dataset.k:+th.dataset.k;if(sortK===k)sortD=-sortD;else{sortK=k;sortD=(k==="last_contact"||k==="touches"||k===5)?-1:1}run()});
+shown=0;$("#list").scrollTop=0;more()}
+function more(){if(shown>=rows.length)return;const end=Math.min(rows.length,shown+200);let h="";
+for(let j=shown;j<end;j++){const r=rows[j];if(tab==="c"){const g=k=>esc(r[F[k]]);
+h+=`<tr class="r${r[0]===selId?" sel":""}" data-j="${j}"><td><b>${g("name")}</b>${r.dn?' <span class="dnc">DNC</span>':""}${r[F.cv_path]?' <span class="t">CV</span>':""}</td><td>${g("current_title")}</td><td>${g("current_company")}</td><td>${g("location")}</td><td>${g("status")}</td><td>${g("last_contact")}</td><td>${g("touches")}</td><td>${[...r.tg].slice(0,6).map(t=>`<span class="t">${esc(t)}</span>`).join("")}</td><td>${esc((r[F.emails]||"").split(",")[0])}</td></tr>`}
+else h+=`<tr class="r" data-j="${j}"><td><b>${r[1]?`<a href="${esc(r[1])}" target="_blank" rel="noopener">${esc(r[0])}</a>`:esc(r[0])}</b></td><td>${esc(r[4])}</td><td>${esc(r[3])}</td><td>${esc(r[2])}</td><td>${esc(r[5])}</td><td>${r[6]!=null?`<a href="#" data-cid="${r[6]}">#${r[6]}</a>`:""}</td></tr>`}
+shown=end;const tb=$("#tb");tb.insertAdjacentHTML("beforeend",h);
+tb.querySelectorAll("tr.r:not([data-b])").forEach(tr=>{tr.dataset.b=1;tr.onclick=e=>{const a=e.target.closest("a[data-cid]");
+if(a){e.preventDefault();showCand(D.cands.find(c=>c[0]==a.dataset.cid));return}if(tab==="c"){tb.querySelectorAll(".sel").forEach(x=>x.classList.remove("sel"));tr.classList.add("sel");showCand(rows[+tr.dataset.j])}}})}
+function link(u){if(!u)return"";const h=/^https?:/.test(u)?u:"https://"+u;return `<a href="${esc(h)}" target="_blank" rel="noopener">${esc(u)}</a>`}
+function showCand(r){if(!r)return;selId=r[0];const g=k=>r[F[k]];const d=$("#det");d.style.display="block";
+const L={emails:"Emails",phone:"Phone",linkedin_url:"LinkedIn",github:"GitHub",x_handle:"X",current_title:"Title",current_company:"Company",location:"Location",school:"School",skill_tags:"Tags",best_roles:"Roles / fit",status:"Status",clients_submitted:"Submitted to",client_outcomes:"Client outcomes",comp_current:"Comp (current)",comp_expected:"Comp (expected)",cv_path:"CV file",first_contact:"First contact",last_contact:"Last contact",last_channel:"Last channel",touches:"Touches",replied:"Replied",do_not_contact:"Do not contact",declined:"Declined",sources:"Sources"};
+let h=`<button class="sec" style="float:right" onclick="document.getElementById('det').style.display='none'">Close</button><h2>${esc(g("name"))}</h2><div class="mut">#${r[0]}</div><dl>`;
+for(const [k,l] of Object.entries(L)){let v=g(k);if(v===""||v==null)continue;
+if(k==="emails")v=String(v).split(",").map(e=>e.trim()).filter(Boolean).map(e=>`<a href="mailto:${esc(e)}">${esc(e)}</a>`).join(", ");
+else if(k==="linkedin_url"||k==="github")v=link(v);else if(k==="x_handle")v=`<a href="https://x.com/${esc(String(v).replace(/^@/,""))}" target="_blank" rel="noopener">@${esc(String(v).replace(/^@/,""))}</a>`;
+else if(k==="do_not_contact"&&v==="n")continue;else if(k==="do_not_contact")v=`<span class="dnc">${esc(v)}</span>`;else v=esc(v);h+=`<dt>${l}</dt><dd>${v}</dd>`}
+h+="</dl>";if(g("notes"))h+=`<h3>Notes</h3><pre>${esc(g("notes"))}</pre>`;
+const hs=g("history")||[];if(hs.length)h+=`<h3>History (${hs.length})</h3><table><tr><th>Date</th><th>Ch</th><th>Type</th><th>Roles</th><th>Summary</th></tr>${hs.map(x=>`<tr><td style="white-space:nowrap">${esc(x[0])}</td><td>${esc(x[1])}</td><td>${esc(x[2])}</td><td>${esc(x[3])}</td><td>${esc(x[4])}</td></tr>`).join("")}</table>`;
+if(g("cv_text"))h+=`<h3>CV text</h3><pre>${esc(g("cv_text"))}</pre>`;
+const lis=D.li.filter(x=>x[6]===r[0]);if(lis.length)h+=`<h3>LinkedIn connection</h3>`+lis.map(x=>`<div>${link(x[1])} · ${esc(x[4])} @ ${esc(x[3])} · connected ${esc(x[5])}</div>`).join("");
+d.innerHTML=h;d.scrollTop=0}
+function exportCsv(){const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';let out;
+if(tab==="c"){const ks=["name","emails","phone","linkedin_url","current_title","current_company","location","status","last_contact","touches","skill_tags","clients_submitted","cv_path"];out=[ks.join(",")].concat(rows.map(r=>ks.map(k=>q(r[F[k]])).join(",")))}
+else out=[D.li_fields.join(",")].concat(rows.map(r=>r.slice(0,7).map(q).join(",")));
+const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+out.join("\n")],{type:"text/csv"}));a.download=(tab==="c"?"candidates":"li-connections")+"-filtered.csv";a.click()}
+</script></body></html>
